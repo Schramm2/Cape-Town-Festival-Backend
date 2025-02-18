@@ -1,0 +1,61 @@
+# 🚀 Node.js & React Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# 🔥 Logs & Debug Files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.trace
+
+# 🚀 Build & Production Files
+dist/
+build/
+.cache/
+.vscode/
+
+# 🔐 Environment Variables (Sensitive Data)
+.env
+
+*.env.local
+*.env.production
+*.env.development
+
+# 🔥 Firebase & Cloud Services
+firebase.json
+firebaseConfig.js
+serviceAccountKey.json
+google-services.json
+aws-config.json
+gcloud-config.json
+# 🛠 Editor Configs & System Files
+.vscode/          # VS Code settings
+.idea/            # WebStorm settings
+.DS_Store         # macOS system file
+Thumbs.db         # Windows system file
+.npmrc            # NPM config file
+yarn.lock         # Yarn lock file
+
+# 🔥 Temporary & OS-Specific Files
+/tmp
+/temp
+.DS_Store
+*.swp
+
+# 🚀 Git & CI/CD
+.gitignore        # Prevent accidental modification
+/.github/
+.gitlab-ci.yml    # GitLab CI/CD settings
+.travis.yml       # Travis CI/CD settings
+.circleci/        # CircleCI configs
+
+# 🔥 Credentials & Security
+firebaseConfig.js  # ✅ Avoid exposing Firebase secrets
+google-services.json  # ✅ Prevent Android Firebase config leak
+serviceAccountKey.json  # ✅ Firebase Admin SDK Key (Backend)
+aws-config.json  # ✅ AWS Credentials
+gcloud-config.json  # ✅ Google Cloud
