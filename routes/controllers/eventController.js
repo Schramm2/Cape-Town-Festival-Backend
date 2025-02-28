@@ -1,4 +1,4 @@
-import { db } from "../firebaseConfig.js"; // ✅ Import Firestore from updated config
+import { db } from "../../firebaseConfig.js"; // ✅ Import Firestore from updated config
 import { Timestamp } from "firebase-admin/firestore"; // ✅ Import Firestore Timestamp
 import nodemailer from "nodemailer";
 
