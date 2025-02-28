@@ -1,6 +1,8 @@
 import { db } from "../../firebaseConfig.js";
 
-// ✅ Fetch Admin Dashboard Statistics
+
+
+// ✅ Fetch Admin Dashboard Statistics (Overall Event Statistics)
 export const getAdminStats = async (req, res) => {
   try {
     console.log("Fetching admin dashboard statistics...");
@@ -39,10 +41,85 @@ export const getAdminStats = async (req, res) => {
   }
 };
 
+// Specific Event stats
+export const getEventStats = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // ✅ Fetch Event Data
+    const eventRef = db.collection("events").doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    const eventData = eventDoc.data();
+    const totalAttendees = eventData.RSVPs ? eventData.RSVPs.length : 0;
+    const ratings = eventData.Ratings || [];
+    const averageRating = ratings.length > 0 ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1) : "No Ratings Yet";
+
+    res.status(200).json({ eventId, totalAttendees, averageRating });
+  } catch (error) {
+    console.error("Error fetching event statistics:", error);
+    res.status(500).json({ error: "Failed to fetch event statistics" });
+  }
+};
+
+export const getEventIDChartsData = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // ✅ Fetch Event Data
+    const eventRef = db.collection("events").doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    const eventData = eventDoc.data();
+    const attendees = eventData.RSVPs || [];
+
+    let ageDistribution = { "18-24": 0, "25-34": 0, "35-44": 0, "45-54": 0, "55+": 0 };
+    let genderDistribution = { Male: 0, Female: 0, Other: 0 };
+
+    for (let attendee of attendees) {
+      const userRef = db.collection("users").doc(attendee);
+      const userDoc = await userRef.get();
+      if (userDoc.exists) {
+        const user = userDoc.data();
+
+        // ✅ Count Age Groups
+        if (user.age) {
+          const age = parseInt(user.age);
+          if (age >= 18 && age <= 24) ageDistribution["18-24"]++;
+          else if (age >= 25 && age <= 34) ageDistribution["25-34"]++;
+          else if (age >= 35 && age <= 44) ageDistribution["35-44"]++;
+          else if (age >= 45 && age <= 54) ageDistribution["45-54"]++;
+          else ageDistribution["55+"]++;
+        }
+
+        // ✅ Count Gender Distribution
+        if (user.gender) {
+          if (user.gender.toLowerCase() === "male") genderDistribution.Male++;
+          else if (user.gender.toLowerCase() === "female") genderDistribution.Female++;
+          else genderDistribution.Other++;
+        }
+      }
+    }
+
+    res.status(200).json({ eventId, ageDistribution, genderDistribution });
+  } catch (error) {
+    console.error("Error fetching event charts data:", error);
+    res.status(500).json({ error: "Failed to fetch event charts" });
+  }
+};
 
 
 
-// ✅ Fetch Event Statistics for Charts
+
+// ✅ Fetch Overall Event Statistics for Charts
 export const getEventChartsData = async (req, res) => {
   try {
     console.log("Fetching event statistics for charts...");

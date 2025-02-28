@@ -1,5 +1,6 @@
 import { db } from "../../firebaseConfig.js";
 import { Timestamp } from "firebase-admin/firestore"; // ✅ Import Firestore Timestamp
+import nodemailer from "nodemailer";
 
 
 const formatTimestamp = (timestamp) => {
@@ -8,6 +9,29 @@ const formatTimestamp = (timestamp) => {
     return timestamp.toDate().toLocaleString();
   }
   return timestamp; // ✅ If stored as a string, return it directly
+};
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER, // Your email
+    pass: process.env.EMAIL_PASS, // App password or SMTP password
+  },
+});
+const sendRSVPEmail = async (userEmail, userName, eventData, type) => {
+  const subject = type === "confirm" ? `RSVP Confirmation: ${eventData.title}` : `RSVP Cancellation: ${eventData.title}`;
+  const message =
+    type === "confirm"
+      ? `Hello ${userName},\n\nYou have successfully RSVP'd for the event "${eventData.title}".\n\n📅 Date: ${eventData.startTime.toDate().toLocaleString()}\n📍 Location: ${eventData.Location}\n\nWe look forward to seeing you there!\n\nBest Regards,\nCape Town Festival Team`
+      : `Hello ${userName},\n\nYou have successfully **CANCELLED** your RSVP for the event "${eventData.title}".\n\nIf this was a mistake, you can RSVP again on the event page.\n\nBest Regards,\nCape Town Festival Team`;
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: userEmail,
+    subject,
+    text: message,
+  };
+
+  await transporter.sendMail(mailOptions);
 };
 
 // ✅ Fetch all events from Firestore
@@ -80,58 +104,33 @@ export const rsvpEvent = async (req, res) => {
 
     const eventRef = db.collection("events").doc(eventId);
     const userRef = db.collection("users").doc(userId);
-    const rsvpRef = db.collection("rsvps").doc(); // Create new RSVP document
 
     const eventDoc = await eventRef.get();
     const userDoc = await userRef.get();
 
-    if (!eventDoc.exists) {
-      return res.status(404).json({ error: "Event not found" });
-    }
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    if (!eventDoc.exists) return res.status(404).json({ error: "Event not found" });
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
 
     const eventData = eventDoc.data();
     const userData = userDoc.data();
+    const userEmail = userData.email;
 
     // ✅ Prevent RSVP if the event has already occurred
-    const eventDate = new Date(eventData.startTime);
-    const now = new Date();
-    if (now > eventDate) {
+    if (new Date(eventData.startTime.toDate()) < new Date()) {
       return res.status(400).json({ error: "Event has already occurred. RSVP not allowed." });
     }
 
-    // ✅ Ensure user's `rsvpEvents` array is updated (store event title)
-    const updatedRSVPs = userData.rsvpEvents ? userData.rsvpEvents : [];
-
-    // ✅ Prevent duplicate RSVP based on event title
-    if (updatedRSVPs.includes(eventData.title)) {
+    // ✅ Prevent duplicate RSVP
+    if (userData.rsvpEvents && userData.rsvpEvents.includes(eventData.title)) {
       return res.status(400).json({ error: "You have already RSVP'd for this event!" });
     }
-    const updatedRSVPCount = (eventData.attending) + 1;
-    await eventRef.update({ attending: updatedRSVPCount });
 
-    updatedRSVPs.push(eventData.title);
-    await userRef.update({ rsvpEvents: updatedRSVPs });
+    // ✅ Update RSVP count and user data
+    await userRef.update({ rsvpEvents: [...(userData.rsvpEvents || []), eventData.title] });
+    await eventRef.update({ RSVPs: [...(eventData.RSVPs || []), userId] });
 
-    // ✅ Ensure `RSVPs` array exists in Firestore and add user's document ID
-    const eventRSVPs = Array.isArray(eventData.RSVPs) ? [...eventData.RSVPs] : [];
-
-    // ✅ Prevent duplicate user ID in `RSVPs` array
-    if (!eventRSVPs.includes(userId)) {
-      eventRSVPs.push(userId); // ✅ Add user's Firestore document ID to RSVPs
-      await eventRef.update({ RSVPs: eventRSVPs });
-    }
-
-    // ✅ Create a new RSVP document in `rsvps` collection
-    await rsvpRef.set({
-      rsvpId: rsvpRef.id,
-      userId,
-      eventId,
-      eventName: eventData.title,
-      timestamp: new Date().toISOString(),
-    });
+    // ✅ Send RSVP confirmation email
+    await sendRSVPEmail(userEmail, userData.fullname, eventData, "confirm");
 
     res.status(200).json({ message: "RSVP successful", eventId });
   } catch (error) {
@@ -139,6 +138,8 @@ export const rsvpEvent = async (req, res) => {
     res.status(500).json({ error: "Failed to process RSVP" });
   }
 };
+
+
 export const getEventById = async (req, res) => {
   const { eventId } = req.params;
   const { userId } = req.query; // ✅ Get userId from query parameters
@@ -187,6 +188,28 @@ export const getEventById = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch event" });
   }
 };
+
+// ✅ Delete an event from Firestore
+export const deleteEvent = async (req, res) => {
+  const { eventId } = req.params;
+
+  try {
+    const eventRef = db.collection("events").doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    await eventRef.delete(); // ✅ Remove the event from Firestore
+
+    res.status(200).json({ message: "Event deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    res.status(500).json({ error: "Failed to delete event" });
+  }
+};
+
 
 export const rateEvent = async (req, res) => {
   const { eventId, userId, rating, comment } = req.body;
@@ -245,30 +268,24 @@ export const cancelRSVP = async (req, res) => {
     const eventDoc = await eventRef.get();
     const userDoc = await userRef.get();
 
-    if (!eventDoc.exists) {
-      return res.status(404).json({ error: "Event not found" });
-    }
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    if (!eventDoc.exists) return res.status(404).json({ error: "Event not found" });
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
 
     const eventData = eventDoc.data();
     const userData = userDoc.data();
+    const userEmail = userData.email;
 
     // ✅ Prevent RSVP cancellation if the event has already started
-    const eventDate = new Date(eventData.startTime);
-    const now = new Date();
-    if (now > eventDate) {
+    if (new Date(eventData.startTime.toDate()) < new Date()) {
       return res.status(400).json({ error: "Event has already started. Cancellation not allowed." });
     }
 
-    // ✅ Remove event title from user's rsvpEvents array
-    const updatedRSVPs = userData.rsvpEvents.filter(title => title !== eventData.title);
-    await userRef.update({ rsvpEvents: updatedRSVPs });
+    // ✅ Remove RSVP from user and event data
+    await userRef.update({ rsvpEvents: userData.rsvpEvents.filter((title) => title !== eventData.title) });
+    await eventRef.update({ RSVPs: eventData.RSVPs.filter((id) => id !== userId) });
 
-    // ✅ Decrease the RSVP count in the event
-    const updatedRSVPCount = Math.max((eventData.attending || 0) - 1, 0);
-    await eventRef.update({ attending: updatedRSVPCount });
+    // ✅ Send RSVP cancellation email
+    await sendRSVPEmail(userEmail, userData.fullname, eventData, "cancel");
 
     res.status(200).json({ message: "RSVP cancelled successfully", eventId });
   } catch (error) {

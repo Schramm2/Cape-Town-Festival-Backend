@@ -53,9 +53,4 @@ yarn.lock         # Yarn lock file
 .travis.yml       # Travis CI/CD settings
 .circleci/        # CircleCI configs
 
-# 🔥 Credentials & Security
-firebaseConfig.js  # ✅ Avoid exposing Firebase secrets
-google-services.json  # ✅ Prevent Android Firebase config leak
-serviceAccountKey.json  # ✅ Firebase Admin SDK Key (Backend)
-aws-config.json  # ✅ AWS Credentials
-gcloud-config.json  # ✅ Google Cloud
+
